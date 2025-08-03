@@ -73,6 +73,11 @@
         <table id="dataTable"><thead><tr><th>नाम</th><th>कुल अंक</th><th>श्रेणी</th><th>क्षेत्र</th></tr></thead><tbody></tbody></table>
     </div>
 
+    <div class="container" style="text-align: center;">
+        <h3 style="border-bottom: none;">🔴 लाइव दर्शक</h3>
+        <p id="live-viewers-counter" style="font-size: 24px; font-weight: bold; color: #dc3545; margin: 0;">0</p>
+    </div>
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
@@ -90,6 +95,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const studentsCollection = db.collection('students');
+        const siteStatsCollection = db.collection('siteStats'); // साइट आंकड़ों के लिए नया कलेक्शन
         
         let allStudentsData = [];
         let marksDistributionChart, categoryAverageChart;
@@ -295,6 +301,35 @@
             if (localStorage.getItem('hasSubmitted') === 'true') {
                 disableForm();
             }
+
+            // --- लाइव व्यूअर काउंटर का लॉजिक ---
+            const counterRef = siteStatsCollection.doc('liveCounter');
+
+            // जब उपयोगकर्ता पेज पर आता है तो गिनती बढ़ाएं
+            counterRef.update({ count: firebase.firestore.FieldValue.increment(1) })
+                .catch(error => {
+                    // यदि दस्तावेज़ मौजूद नहीं है, तो इसे 1 से प्रारंभ करें
+                    if (error.code === 'not-found') {
+                        counterRef.set({ count: 1 });
+                    }
+                });
+
+            // काउंटर में परिवर्तनों को सुनें और पेज पर दिखाएं
+            counterRef.onSnapshot(doc => {
+                const counterElement = document.getElementById('live-viewers-counter');
+                if (counterElement) {
+                    const viewerCount = doc.exists && doc.data().count > 0 ? doc.data().count : 0;
+                    counterElement.textContent = viewerCount;
+                }
+            }, err => {
+                console.error("काउंटर लिस्नर में त्रुटि:", err);
+            });
+
+            // जब उपयोगकर्ता पेज छोड़ता है तो गिनती घटाएं
+            window.addEventListener('beforeunload', () => {
+                // नोट: यह हमेशा काम नहीं कर सकता है, खासकर मोबाइल ब्राउज़रों पर
+                counterRef.update({ count: firebase.firestore.FieldValue.increment(-1) });
+            });
         });
     </script>
 </body>
