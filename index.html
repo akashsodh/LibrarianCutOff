@@ -29,6 +29,33 @@
         #form-disabled-message { color: #dc3545; background-color: #f8d7da; }
         #submissionResult { color: #155724; background-color: #d4edda; }
         .chart-container { margin-top: 20px; }
+        #pagination-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .page-btn {
+            margin: 0 5px;
+            padding: 8px 12px;
+            border: 1px solid #007bff;
+            background-color: #fff;
+            color: #007bff;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .page-btn:hover, .page-btn.active {
+            background-color: #007bff;
+            color: #fff;
+        }
+        .page-btn:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            border-color: #ccc;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -40,9 +67,10 @@
             <h3 style="color: #d9534f; text-align:center; margin-top: 0; border-bottom: none;">📢 ज़रूरी सूचना 📢</h3>
             <p style="text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 0;">
                 कृपया इस फ़ॉर्म में अपने कुल अंक (Marks) ही भरें, सही हुए प्रश्नों की संख्या नहीं। <br>
-                प्रत्येक प्रश्न 2 अंकों का है। उदाहरण के लिए, यदि आपके पेपर 1 में 70 प्रश्न सही हैं, तो आपको <strong>140 अंक</strong> भरने हैं।
+                प्रत्येक प्रश्न 2 अंकों का है। <br>उदाहरण के लिए, यदि आपके पेपर 1 में 70 प्रश्न सही हैं, तो आपको <strong>140 अंक</strong> भरने हैं।
             </p>
         </div>
+
         <div id="form-container">
             <div id="submissionResult" style="display:none;"></div>
             <div id="form-disabled-message" style="display:none;"></div>
@@ -72,13 +100,19 @@
         <h3>📈 CATAGORY WISE CUT OFF ANALYSIS</h3>
         <table id="cutoffTable"><thead><tr><th>श्रेणी</th><th>उम्मीदवार</th><th>औसत अंक</th><th>मीडियन अंक</th><th>सर्वोच्च अंक</th></tr></thead><tbody></tbody></table>
     </div>
+
+    <div class="container" style="text-align: center;">
+        <h3 style="border-bottom: none;">📝 कुल पंजीकृत छात्र</h3>
+        <p id="total-students-counter" style="font-size: 24px; font-weight: bold; color: #0056b3; margin: 0;">0</p>
+    </div>
     
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h3>👥 All Student's Data</h3>
             <button id="exportBtn">📄 Download Report</button>
         </div>
-        <table id="dataTable"><thead><tr><th>नाम</th><th>कुल अंक</th><th>श्रेणी</th><th>क्षेत्र</th></tr></thead><tbody></tbody></table>
+        <table id="dataTable"><thead><tr><th>रैंक (Overall)</th><th>रैंक (Category)</th><th>नाम</th><th>कुल अंक</th><th>श्रेणी</th><th>क्षेत्र</th></tr></thead><tbody></tbody></table>
+        <div id="pagination-wrapper"></div>
     </div>
 
     <div class="container" style="text-align: center;">
@@ -103,27 +137,133 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const studentsCollection = db.collection('students');
-        const siteStatsCollection = db.collection('siteStats'); // साइट आंकड़ों के लिए नया कलेक्शन
+        const siteStatsCollection = db.collection('siteStats');
         
         let allStudentsData = [];
+        let processedStudentsData = [];
         let marksDistributionChart, categoryAverageChart;
+
+        let currentPage = 1;
+        const rowsPerPage = 1000;
 
         const form = document.getElementById('marksForm');
         const submissionResultDiv = document.getElementById('submissionResult');
 
         // रियल-टाइम डेटा लिस्नर
         studentsCollection.orderBy('totalMarks', 'desc').onSnapshot(snapshot => {
-            allStudentsData = snapshot.docs.map(doc => doc.data());
+            allStudentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
-            updateDataTable(allStudentsData);
+            // === नया: कुल छात्र काउंटर अपडेट करें ===
+            document.getElementById('total-students-counter').textContent = allStudentsData.length;
+            
+            processAndDisplayData(allStudentsData);
             updateCutoffTable(allStudentsData);
             updateCharts(allStudentsData);
 
         }, error => {
             console.error("Firestore से डेटा प्राप्त करने में त्रुटि: ", error);
         });
+        
+        function processAndDisplayData(data) {
+            let rank = 0;
+            let lastMarks = -1;
+            data.forEach((student, index) => {
+                if (student.totalMarks !== lastMarks) {
+                    rank = index + 1;
+                }
+                student.overallRank = rank;
+                lastMarks = student.totalMarks;
+            });
 
-        // फॉर्म सबमिशन
+            const categoryGroups = {};
+            data.forEach(student => {
+                const key = `${student.category} - ${student.area}`;
+                if (!categoryGroups[key]) {
+                    categoryGroups[key] = [];
+                }
+                categoryGroups[key].push(student);
+            });
+
+            for (const key in categoryGroups) {
+                const group = categoryGroups[key];
+                let categoryRank = 0;
+                let lastCategoryMarks = -1;
+                group.forEach((student, index) => {
+                    if (student.totalMarks !== lastCategoryMarks) {
+                        categoryRank = index + 1;
+                    }
+                    student.categoryRank = categoryRank;
+                    lastCategoryMarks = student.totalMarks;
+                });
+            }
+            
+            processedStudentsData = data;
+            // अगर वर्तमान पेज डेटा से बाहर हो जाता है तो उसे रीसेट करें
+            if ((currentPage - 1) * rowsPerPage >= processedStudentsData.length) {
+                currentPage = 1;
+            }
+            displayPage(processedStudentsData);
+        }
+
+        function displayPage(data) {
+            updateDataTable(data);
+            setupPagination(data);
+        }
+
+        function updateDataTable(data) {
+            const tableBody = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
+            tableBody.innerHTML = '';
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = startIndex + rowsPerPage;
+            const paginatedItems = data.slice(startIndex, endIndex);
+
+            paginatedItems.forEach(student => {
+                const newRow = tableBody.insertRow();
+                newRow.innerHTML = `
+                    <td><strong>${student.overallRank}</strong></td>
+                    <td>${student.categoryRank}</td>
+                    <td>${student.name}</td>
+                    <td><strong>${student.totalMarks}</strong></td>
+                    <td>${student.category}</td>
+                    <td>${student.area}</td>
+                `;
+            });
+        }
+
+        function setupPagination(data) {
+            const paginationWrapper = document.getElementById('pagination-wrapper');
+            paginationWrapper.innerHTML = '';
+            if (data.length <= rowsPerPage) return; // अगर एक ही पेज है तो पेजिनेशन न दिखाएं
+
+            const pageCount = Math.ceil(data.length / rowsPerPage);
+
+            const prevButton = document.createElement('button');
+            prevButton.classList.add('page-btn');
+            prevButton.innerText = 'पिछला';
+            prevButton.disabled = currentPage === 1;
+            prevButton.addEventListener('click', () => {
+                currentPage--;
+                displayPage(data);
+            });
+            paginationWrapper.appendChild(prevButton);
+
+            const pageInfo = document.createElement('span');
+            pageInfo.style.margin = '0 10px';
+            pageInfo.innerText = `पेज ${currentPage} / ${pageCount}`;
+            paginationWrapper.appendChild(pageInfo);
+            
+            const nextButton = document.createElement('button');
+            nextButton.classList.add('page-btn');
+            nextButton.innerText = 'अगला';
+            nextButton.disabled = currentPage === pageCount;
+            nextButton.addEventListener('click', () => {
+                currentPage++;
+                displayPage(data);
+            });
+            paginationWrapper.appendChild(nextButton);
+        }
+
         form.addEventListener('submit', async function(event) {
             event.preventDefault();
             clearErrors();
@@ -162,56 +302,22 @@
                 submitBtn.textContent = 'अपना स्कोर जमा करें';
             }
         });
-
+        
         function updateCharts(data) {
-            // 1. मार्क्स वितरण चार्ट
             const marksRanges = {};
             const ranges = ['200-220', '221-240', '241-260', '261-280', '281-300', '301-320', '321-340', '341+'];
             ranges.forEach(r => marksRanges[r] = 0);
-
             data.forEach(student => {
                 const tm = student.totalMarks;
-                if (tm <= 220) marksRanges['200-220']++;
-                else if (tm <= 240) marksRanges['221-240']++;
-                else if (tm <= 260) marksRanges['241-260']++;
-                else if (tm <= 280) marksRanges['261-280']++;
-                else if (tm <= 300) marksRanges['281-300']++;
-                else if (tm <= 320) marksRanges['301-320']++;
-                else if (tm <= 340) marksRanges['321-340']++;
-                else marksRanges['341+']++;
+                if (tm <= 220) marksRanges['200-220']++; else if (tm <= 240) marksRanges['221-240']++; else if (tm <= 260) marksRanges['241-260']++; else if (tm <= 280) marksRanges['261-280']++; else if (tm <= 300) marksRanges['281-300']++; else if (tm <= 320) marksRanges['301-320']++; else if (tm <= 340) marksRanges['321-340']++; else marksRanges['341+']++;
             });
-
             const chart1Ctx = document.getElementById('marksDistributionChart').getContext('2d');
             if (marksDistributionChart) marksDistributionChart.destroy();
-            marksDistributionChart = new Chart(chart1Ctx, {
-                type: 'bar',
-                data: {
-                    labels: Object.keys(marksRanges),
-                    datasets: [{
-                        label: 'छात्रों की संख्या',
-                        data: Object.values(marksRanges),
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)'
-                    }]
-                },
-                options: { responsive: true, plugins: { title: { display: true, text: 'अंक वितरण (Marks Distribution)' } } }
-            });
-
-            // 2. श्रेणी-वार औसत चार्ट
+            marksDistributionChart = new Chart(chart1Ctx, { type: 'bar', data: { labels: Object.keys(marksRanges), datasets: [{ label: 'छात्रों की संख्या', data: Object.values(marksRanges), backgroundColor: 'rgba(54, 162, 235, 0.6)' }] }, options: { responsive: true, plugins: { title: { display: true, text: 'अंक वितरण (Marks Distribution)' } } } });
             const categoryData = getCategoryStats(data);
             const chart2Ctx = document.getElementById('categoryAverageChart').getContext('2d');
             if (categoryAverageChart) categoryAverageChart.destroy();
-            categoryAverageChart = new Chart(chart2Ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(categoryData),
-                    datasets: [{
-                        label: 'औसत अंक',
-                        data: Object.values(categoryData).map(c => c.average.toFixed(2)),
-                        backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40']
-                    }]
-                },
-                options: { responsive: true, plugins: { title: { display: true, text: 'श्रेणी-वार औसत अंक' } } }
-            });
+            categoryAverageChart = new Chart(chart2Ctx, { type: 'doughnut', data: { labels: Object.keys(categoryData), datasets: [{ label: 'औसत अंक', data: Object.values(categoryData).map(c => c.average.toFixed(2)), backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff', '#ff9f40'] }] }, options: { responsive: true, plugins: { title: { display: true, text: 'श्रेणी-वार औसत अंक' } } } });
         }
         
         function updateCutoffTable(data) {
@@ -232,7 +338,6 @@
                 if (!groupedData[key]) groupedData[key] = [];
                 groupedData[key].push(student.totalMarks);
             });
-
             const categoryStats = {};
             for (const key in groupedData) {
                 const marks = groupedData[key].sort((a, b) => a - b);
@@ -240,13 +345,7 @@
                 const sum = marks.reduce((acc, val) => acc + val, 0);
                 const mid = Math.floor(marks.length / 2);
                 const median = marks.length % 2 !== 0 ? marks[mid] : (marks[mid - 1] + marks[mid]) / 2;
-                
-                categoryStats[key] = {
-                    count: marks.length,
-                    average: sum / marks.length,
-                    median: median,
-                    highest: marks[marks.length - 1]
-                };
+                categoryStats[key] = { count: marks.length, average: sum / marks.length, median: median, highest: marks[marks.length - 1] };
             }
             return categoryStats;
         }
@@ -256,37 +355,26 @@
             if (totalStudents === 0) return 100;
             const studentsBelow = data.filter(s => s.totalMarks < userScore).length;
             const studentsWithSameScore = data.filter(s => s.totalMarks === userScore).length;
-            // A common percentile formula
             return ((studentsBelow + (0.5 * studentsWithSameScore)) / totalStudents) * 100;
         }
 
         document.getElementById('exportBtn').addEventListener('click', () => {
-            let csvContent = "data:text/csv;charset=utf-8,नाम,पेपर 1,पेपर 2,कुल अंक,लिंग,श्रेणी,क्षेत्र\n";
-            allStudentsData.forEach(row => {
-                let name = `"${row.name.replace(/"/g, '""')}"`; // Handle names with quotes
-                csvContent += `${name},${row.paper1},${row.paper2},${row.totalMarks},${row.gender},${row.category},${row.area}\n`;
+            let csvContent = "data:text/csv;charset=utf-8,Overall Rank,Category Rank,नाम,पेपर 1,पेपर 2,कुल अंक,लिंग,श्रेणी,क्षेत्र\n";
+            processedStudentsData.forEach(row => {
+                let name = `"${row.name.replace(/"/g, '""')}"`;
+                csvContent += `${row.overallRank},${row.categoryRank},${name},${row.paper1},${row.paper2},${row.totalMarks},${row.gender},${row.category},${row.area}\n`;
             });
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "librarian_marks_data.csv");
+            link.setAttribute("download", "librarian_marks_data_with_ranks.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         });
-
-        function updateDataTable(data) {
-            const tableBody = document.getElementById('dataTable').getElementsByTagName('tbody')[0];
-            tableBody.innerHTML = '';
-            data.forEach(student => {
-                const newRow = tableBody.insertRow();
-                newRow.innerHTML = `<td>${student.name}</td><td><strong>${student.totalMarks}</strong></td><td>${student.category}</td><td>${student.area}</td>`;
-            });
-        }
         
         function disableForm() {
-            const formContainer = document.getElementById('form-container');
-            formContainer.innerHTML = `<div id="form-disabled-message">धन्यवाद! आपने इस डिवाइस से अपना डेटा पहले ही जमा कर दिया है।</div>`;
+            document.getElementById('form-container').innerHTML = `<div id="form-disabled-message">धन्यवाद! आपने इस डिवाइस से अपना डेटा पहले ही जमा कर दिया है।</div>`;
         }
         
         function validateForm(name, p1, p2, gen, cat, area) {
@@ -310,19 +398,16 @@
                 disableForm();
             }
 
-            // --- लाइव व्यूअर काउंटर का लॉजिक ---
+            // --- लाइव व्यूअर काउंटर का लॉजिक (सुधार के साथ) ---
             const counterRef = siteStatsCollection.doc('liveCounter');
 
-            // जब उपयोगकर्ता पेज पर आता है तो गिनती बढ़ाएं
             counterRef.update({ count: firebase.firestore.FieldValue.increment(1) })
                 .catch(error => {
-                    // यदि दस्तावेज़ मौजूद नहीं है, तो इसे 1 से प्रारंभ करें
                     if (error.code === 'not-found') {
                         counterRef.set({ count: 1 });
                     }
                 });
 
-            // काउंटर में परिवर्तनों को सुनें और पेज पर दिखाएं
             counterRef.onSnapshot(doc => {
                 const counterElement = document.getElementById('live-viewers-counter');
                 if (counterElement) {
@@ -333,10 +418,20 @@
                 console.error("काउंटर लिस्नर में त्रुटि:", err);
             });
 
-            // जब उपयोगकर्ता पेज छोड़ता है तो गिनती घटाएं
+            // --- पेज छोड़ने पर काउंटर कम करने का बेहतर तरीका ---
             window.addEventListener('beforeunload', () => {
-                // नोट: यह हमेशा काम नहीं कर सकता है, खासकर मोबाइल ब्राउज़रों पर
-                counterRef.update({ count: firebase.firestore.FieldValue.increment(-1) });
+                // यह ट्रांज़ैक्शन सुनिश्चित करता है कि गिनती कभी भी 0 से नीचे न जाए
+                db.runTransaction(transaction => {
+                    return transaction.get(counterRef).then(doc => {
+                        if (!doc.exists) return;
+                        const newCount = doc.data().count - 1;
+                        if (newCount >= 0) {
+                            transaction.update(counterRef, { count: newCount });
+                        }
+                    });
+                }).catch(error => {
+                    console.error("लाइव काउंटर घटाने में त्रुटि: ", error);
+                });
             });
         });
     </script>
