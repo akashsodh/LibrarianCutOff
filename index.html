@@ -112,19 +112,7 @@
             justify-content: center;
             gap: 8px;
         }
-
-        #submitBtn {
-            width: 100%;
-            background-color: var(--success-color);
-            margin-top: 15px;
-        }
-
-        #submitBtn:hover:not(:disabled) {
-            background-color: #218838;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(40, 167, 69, 0.3);
-        }
-
+        
         button:disabled {
             background-color: #6c757d;
             cursor: not-allowed;
@@ -171,29 +159,20 @@
         tbody tr:hover {
             background-color: #e2e8f0;
         }
-
-        .error {
-            color: var(--danger-color);
-            font-size: 0.85rem;
-            margin-top: 5px;
-        }
         
-        #submissionResult, .info-box {
+        .info-box {
             text-align: center;
             font-size: 1.1rem;
-            padding: 18px;
+            padding: 25px;
             border-radius: 8px;
             margin-top: 10px;
             border: 1px solid;
-        }
-        
-        .info-box {
-            background-color: #fffbe6;
-            border-color: #ffe58f;
+            background-color: #eef7ff;
+            border-color: #a7d1fb;
         }
 
         .info-box h3 {
-             color: #c09853; /* Changed color for better visibility */
+             color: #0056b3;
              border-bottom: none;
              margin: 0 0 15px 0;
              font-size: 1.5rem;
@@ -206,12 +185,6 @@
             margin: 0;
         }
 
-        #submissionResult {
-            color: #155724;
-            background-color: #d4edda;
-            border-color: #c3e6cb;
-        }
-
         .chart-container {
             margin-top: 20px;
             padding: 15px;
@@ -219,25 +192,43 @@
             background-color: var(--light-color);
         }
         
-        .honesty-check {
+        /* --- NEW STYLES FOR NOTIFY ME SECTION --- */
+        .notify-section {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #cce4ff;
+        }
+        .notify-section .notify-heading {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--dark-color);
+            margin-bottom: 15px;
+        }
+        #notifyForm {
             display: flex;
+            gap: 10px;
             align-items: center;
-            margin-top: 20px;
-            background-color: #f0f8ff;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #bde0fe;
         }
-        .honesty-check input[type="checkbox"] {
-            width: auto;
-            margin-right: 12px;
-            transform: scale(1.2);
+        #notifyForm input {
+            flex-grow: 1;
         }
-        .honesty-check label {
-            margin-bottom: 0;
+        #notifyBtn {
+            background-color: var(--success-color);
+            flex-shrink: 0;
+        }
+        #notifyMessage {
             font-size: 0.9rem;
-            font-weight: normal;
+            margin-top: 10px;
+            font-weight: 500;
         }
+        @media (max-width: 480px) {
+            #notifyForm {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+        /* --- END OF NEW STYLES --- */
+
 
         @media (max-width: 768px) {
             body { padding: 10px; gap: 20px; }
@@ -253,15 +244,23 @@
     <div class="container">
         <h2>Librarian 3rd Grade 2025 <br>Cut-Off Analysis 🚀</h2>
         
-        <div class="info-box" style="background-color: #eef7ff; border-color: #a7d1fb;">
+        <div class="info-box">
             <h3>📢 ज़रूरी सूचना 📢</h3>
             <p>
                 डेटा कलेक्शन अब बंद कर दिया गया है।<br><br>
                 राजस्थान कर्मचारी चयन बोर्ड (RSSB) द्वारा ऑफिशियल आंसर की जारी होने के बाद, अनुमानित कट-ऑफ जानने के लिए डेटा फिर से एकत्रित किया जाएगा।<br><br>
-                आपसे अनुरोध है कि ऑफिशियल उत्तर कुंजी आने के बाद अपने उत्तरों का मिलान करें और अपनी OMR शीट की फोटो और रोल नंबर सुरक्षित रखें। आपके सहयोग के लिए धन्यवाद!<br><br>
-                ध्यान रहे इसमें कुछ कैंडिडेट्स ने अपने नंबर बढ़ा चढ़ा के भरे है तथा ऑफिशल आंसर की से मिलाने के बाद लगभग सभी के नम्बर कम होंगे इस बार हम कट ऑफ एनालिसिस करने के लिए सभी कैंडिडेट्स के रोल नंबर और OMR SHEET अपलोड करवाई जाएगी । <br><br>धन्यवाद ।
+                आपसे अनुरोध है कि ऑफिशियल उत्तर कुंजी आने के बाद अपने उत्तरों का मिलान करें और अपनी OMR शीट की फोटो और रोल नंबर सुरक्षित रखें।
             </p>
-        </div>
+            
+            <div class="notify-section">
+                <p class="notify-heading">जब डेटा कलेक्शन फिर से शुरू हो तो सूचना प्राप्त करें:</p>
+                <div id="notifyForm">
+                     <input type="email" id="notifyEmail" placeholder="अपना ईमेल दर्ज करें" required>
+                     <button id="notifyBtn">मुझे सूचित करें</button>
+                </div>
+                <p id="notifyMessage"></p>
+            </div>
+            </div>
     </div>
 
     <div class="container" style="text-align: center;">
@@ -311,15 +310,53 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const studentsCollection = db.collection('students');
-        
-        // MODIFICATION: The form related variables and event listeners are no longer needed
-        // as the form is removed from the HTML. The rest of the script for displaying
-        // existing data remains the same.
+        const notificationCollection = db.collection('notifications'); // New collection for notifications
         
         let allStudentsData = [], processedStudentsData = [];
         let marksDistributionChart;
         let currentPage = 1;
         const rowsPerPage = 1000;
+
+        // --- NEW: NOTIFY ME LOGIC ---
+        const notifyBtn = document.getElementById('notifyBtn');
+        const notifyEmailInput = document.getElementById('notifyEmail');
+        const notifyMessage = document.getElementById('notifyMessage');
+
+        notifyBtn.addEventListener('click', async () => {
+            const email = notifyEmailInput.value.trim();
+            
+            // Basic email validation
+            if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+                notifyMessage.textContent = 'कृपया एक मान्य ईमेल दर्ज करें।';
+                notifyMessage.style.color = 'var(--danger-color)';
+                return;
+            }
+
+            notifyBtn.disabled = true;
+            notifyBtn.textContent = 'भेज रहा है...';
+            notifyMessage.textContent = '';
+
+            try {
+                // Add the email to the 'notifications' collection
+                await notificationCollection.add({
+                    email: email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                notifyMessage.textContent = '✅ धन्यवाद! आपको सूचित कर दिया जाएगा।';
+                notifyMessage.style.color = 'var(--success-color)';
+                notifyEmailInput.disabled = true;
+
+            } catch (error) {
+                console.error("Error adding email to notifications: ", error);
+                notifyMessage.textContent = 'एक त्रुटि हुई, कृपया पुनः प्रयास करें।';
+                notifyMessage.style.color = 'var(--danger-color)';
+                notifyBtn.disabled = false;
+                notifyBtn.textContent = 'मुझे सूचित करें';
+            }
+        });
+        // --- END OF NOTIFY ME LOGIC ---
+
 
         document.getElementById('exportBtn').addEventListener('click', () => {
             let csvContent = "data:text/csv;charset=utf-8,Overall Rank,Category Rank,नाम,पेपर 1,पेपर 2,कुल अंक,लिंग,श्रेणी,क्षेत्र\n";
